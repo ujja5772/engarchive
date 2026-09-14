@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Activity Drawer 영어 활동 서랍</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#E9E3D2;
+    --bg-grain:#DFD8C4;
+    --paper:#FBF6E7;
+    --paper-line:#DED2AE;
+    --ink:#2C2620;
+    --ink-soft:#6E6455;
+    --ink-faint:#A79C86;
+    --g3:#DC9B2E;
+    --g3-soft:#F3DFB2;
+    --g3-deep:#8C6011;
+    --g5:#2F6E92;
+    --g5-soft:#C7DDE8;
+    --g5-deep:#194A63;
+    --red:#B8443A;
+    --shadow: rgba(44,38,32,0.18);
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.25), transparent 40%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR', sans-serif;
+    min-height:100vh;
+    padding:32px 18px 80px;
+  }
+
+  .wrap{ max-width:1000px; margin:0 auto; }
+
+  header.top{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-bottom:28px;
+    padding-bottom:18px;
+    border-bottom:2px dashed var(--paper-line);
+  }
+  h1{
+    font-family:'Gaegu', cursive;
+    font-weight:700;
+    font-size:44px;
+    margin:0 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .kr-sub{
+    display:block;
+    font-family:'Gaegu', cursive;
+    font-weight:400;
+    font-size:20px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .sub{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:15px;
+  }
+  .sync-status{
+    margin:6px 0 0;
+    font-size:11.5px;
+    font-weight:600;
+  }
+  .sync-status.ok{ color:#3C6B34; }
+  .sync-status.checking{ color:var(--ink-faint); }
+  .sync-status.error{ color:var(--red); }
+
+  .add-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:8px;
+    padding:12px 18px;
+    font-family:'Noto Sans KR', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+    box-shadow:2px 3px 0 var(--shadow);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .add-btn:hover{ transform:translateY(-2px); box-shadow:3px 5px 0 var(--shadow); }
+  .add-btn:active{ transform:translateY(0); box-shadow:1px 1px 0 var(--shadow); }
+  .add-btn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline:3px solid var(--g5); outline-offset:2px;
+  }
+
+  /* 폴더 탭 */
+  .tabs{
+    display:flex;
+    gap:6px;
+    padding-left:8px;
+  }
+  .tab{
+    font-family:'Gaegu', cursive;
+    font-weight:700;
+    font-size:22px;
+    border:none;
+    cursor:pointer;
+    padding:12px 28px 16px;
+    clip-path: polygon(8% 0, 92% 0, 100% 100%, 0% 100%);
+    position:relative;
+    top:4px;
+    color:var(--ink-soft);
+    transition:top .15s ease, background .15s ease;
+  }
+  .tab[data-grade="3"]{ background:var(--g3-soft); }
+  .tab[data-grade="5"]{ background:var(--g5-soft); }
+  .tab.active[data-grade="3"]{ background:var(--g3); color:#fff; top:0; }
+  .tab.active[data-grade="5"]{ background:var(--g5); color:#fff; top:0; }
+  .tab .count{
+    font-family:'Noto Sans KR', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    opacity:.85;
+    margin-left:4px;
+  }
+
+  .folder-body{
+    background:var(--paper);
+    border-radius:2px 14px 14px 14px;
+    padding:28px 26px 36px;
+    box-shadow:0 6px 0 var(--shadow);
+    min-height:280px;
+  }
+  .folder-body[data-active-grade="3"]{ box-shadow:0 6px 0 var(--shadow), inset 0 4px 0 -1px var(--g3); }
+  .folder-body[data-active-grade="5"]{ box-shadow:0 6px 0 var(--shadow), inset 0 4px 0 -1px var(--g5); }
+
+  .unit-block + .unit-block{ margin-top:30px; }
+  .unit-title{
+    display:inline-block;
+    font-family:'Gaegu', cursive;
+    font-weight:700;
+    font-size:19px;
+    padding:3px 14px 5px;
+    margin-bottom:14px;
+    position:relative;
+  }
+  .unit-title::before{
+    content:"";
+    position:absolute;
+    left:-6px; right:-6px; top:2px; bottom:2px;
+    background:currentColor;
+    opacity:.16;
+    transform:rotate(-1deg);
+    border-radius:2px;
+    z-index:-1;
+  }
+  .unit-title[data-grade="3"]{ color:var(--g3-deep); }
+  .unit-title[data-grade="5"]{ color:var(--g5-deep); }
+
+  .cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(230px, 1fr));
+    gap:18px;
+  }
+
+  .card{
+    background:#fffdf6;
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:16px 15px 14px;
+    position:relative;
+    transition:transform .15s ease, box-shadow .15s ease;
+    box-shadow:2px 3px 0 rgba(44,38,32,0.10);
+  }
+  .card:nth-child(3n+1){ transform:rotate(-0.6deg); }
+  .card:nth-child(3n+2){ transform:rotate(0.5deg); }
+  .card:nth-child(3n+3){ transform:rotate(-0.3deg); }
+  .card:hover{ transform:rotate(0deg) translateY(-3px); box-shadow:3px 6px 0 rgba(44,38,32,0.16); }
+
+  .card::before{
+    content:"";
+    position:absolute;
+    top:-8px; left:50%;
+    transform:translateX(-50%) rotate(-2deg);
+    width:46px; height:16px;
+    background:rgba(220,155,46,0.55);
+    border:1px solid rgba(0,0,0,0.03);
+  }
+  .card[data-grade="5"]::before{ background:rgba(47,110,146,0.45); }
+
+  .card-title{
+    font-weight:700;
+    font-size:16px;
+    margin:4px 0 6px;
+    padding-right:44px;
+  }
+  .skill-chip{
+    display:inline-block;
+    font-size:11px;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:20px;
+    margin-bottom:6px;
+    background:#EFE9D8;
+    color:var(--ink-soft);
+  }
+  .skill-chip[data-skill="Listening"]{ background:#DCEBF5; color:#265E80; }
+  .skill-chip[data-skill="Speaking"]{ background:#F7E2D3; color:#9C5024; }
+  .skill-chip[data-skill="Writing"]{ background:#DEEBDA; color:#3C6B34; }
+  .skill-chip[data-skill="통합"]{ background:#E7E1F0; color:#5B4C82; }
+  .card-desc{
+    font-size:13px;
+    color:var(--ink-soft);
+    line-height:1.5;
+    margin:0 0 12px;
+    min-height:20px;
+  }
+  .card-actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+
+  .open-link{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:13px; font-weight:600;
+    color:#fff;
+    text-decoration:none;
+    padding:7px 12px;
+    border-radius:5px;
+  }
+  .card[data-grade="3"] .open-link{ background:var(--g3); }
+  .card[data-grade="5"] .open-link{ background:var(--g5); }
+  .open-link:hover{ filter:brightness(1.08); }
+
+  .icon-btns{ display:flex; gap:4px; }
+  .icon-btn{
+    background:none; border:none; cursor:pointer;
+    padding:5px; border-radius:5px; color:var(--ink-faint);
+    display:flex;
+  }
+  .icon-btn:hover{ color:var(--ink); background:rgba(0,0,0,0.05); }
+  .icon-btn.danger:hover{ color:var(--red); }
+
+  .empty{
+    color:var(--ink-faint);
+    font-size:14px;
+    padding:20px 4px;
+  }
+
+  /* 모달 */
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(44,38,32,0.45);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .modal{
+    background:var(--paper);
+    width:100%; max-width:420px;
+    border-radius:10px;
+    padding:24px 24px 20px;
+    box-shadow:0 10px 0 var(--shadow);
+  }
+  .modal h2{
+    font-family:'Gaegu', cursive;
+    font-size:24px; margin:0 0 16px;
+  }
+  .field{ margin-bottom:14px; }
+  .field label{
+    display:block; font-size:12.5px; font-weight:600;
+    color:var(--ink-soft); margin-bottom:5px;
+  }
+  .field input, .field textarea, .field select{
+    width:100%;
+    border:1.5px solid var(--paper-line);
+    background:#fffdf7;
+    border-radius:6px;
+    padding:9px 10px;
+    font-family:'Noto Sans KR', sans-serif;
+    font-size:14px;
+    color:var(--ink);
+  }
+  .field select{ cursor:pointer; }
+  .field textarea{ resize:vertical; min-height:56px; }
+  .field.has-error input{ border-color:var(--red); }
+  .field-error{ color:var(--red); font-size:12px; margin-top:4px; display:none; }
+  .field.has-error .field-error{ display:block; }
+  .form-banner{
+    display:none;
+    background:var(--g3-soft);
+    color:var(--g3-deep);
+    font-size:12.5px;
+    padding:8px 10px;
+    border-radius:6px;
+    margin-bottom:12px;
+  }
+  .form-banner.show{ display:block; }
+  .form-banner.error{ background:#F3DAD7; color:var(--red); }
+  .grade-radios{ display:flex; gap:8px; }
+  .grade-radios label{
+    flex:1; text-align:center;
+    border:1.5px solid var(--paper-line);
+    border-radius:6px;
+    padding:9px 0;
+    font-size:14px; font-weight:600;
+    cursor:pointer;
+    color:var(--ink-soft);
+    user-select:none;
+  }
+  .grade-radios label.selected[data-g="3"]{ background:var(--g3-soft); border-color:var(--g3); color:var(--g3-deep); }
+  .grade-radios label.selected[data-g="5"]{ background:var(--g5-soft); border-color:var(--g5); color:var(--g5-deep); }
+
+  .modal-actions{
+    display:flex; justify-content:flex-end; gap:8px; margin-top:18px;
+  }
+  .btn{
+    border:none; border-radius:7px; padding:10px 16px;
+    font-family:'Noto Sans KR', sans-serif; font-weight:600; font-size:13.5px;
+    cursor:pointer;
+  }
+  .btn.ghost{ background:transparent; color:var(--ink-soft); }
+  .btn.ghost:hover{ background:rgba(0,0,0,0.05); }
+  .btn.primary{ background:var(--ink); color:var(--paper); }
+  .btn.primary:hover{ filter:brightness(1.15); }
+
+  .status{
+    text-align:center; color:var(--ink-faint); font-size:13px; padding:40px 0;
+  }
+
+  .toast{
+    position:fixed;
+    left:50%; bottom:26px;
+    transform:translateX(-50%) translateY(8px);
+    background:var(--ink);
+    color:var(--paper);
+    font-size:13px;
+    padding:11px 18px;
+    border-radius:8px;
+    max-width:min(420px, 88vw);
+    text-align:center;
+    box-shadow:0 4px 14px rgba(0,0,0,0.25);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:60;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+
+  @media (max-width:520px){
+    h1{ font-size:30px; }
+    .kr-sub{ font-size:16px; }
+    .tab{ font-size:18px; padding:10px 18px 14px; }
+    .folder-body{ padding:20px 14px 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>English Activity Drawer<span class="kr-sub">영어 활동 서랍</span></h1>
+      <p class="sub">Tr. Olivia 선생님이 만든 영어 수업 활동 웹앱</p>
+      <p class="sync-status checking" id="syncStatus">연결 확인 중...</p>
+    </div>
+    <button class="add-btn" id="openAddBtn" type="button">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2V14M2 8H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      새 활동 추가
+    </button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-grade="3">3학년 <span class="count" id="count3"></span></button>
+    <button class="tab" data-grade="5">5학년 <span class="count" id="count5"></span></button>
+  </nav>
+
+  <div class="folder-body" id="folderBody" data-active-grade="3">
+    <div class="status" id="statusMsg">불러오는 중...</div>
+    <div id="contentArea" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modalOverlay" style="display:none;">
+  <div class="modal">
+    <h2 id="modalTitle">새 활동 추가</h2>
+    <form id="activityForm" novalidate>
+      <div class="form-banner" id="formBanner"></div>
+      <input type="hidden" id="editId">
+      <div class="field">
+        <label>학년</label>
+        <div class="grade-radios" id="gradeToggle">
+          <label data-g="3" class="grade-opt selected" data-value="3"><span>3학년</span></label>
+          <label data-g="5" class="grade-opt" data-value="5"><span>5학년</span></label>
+        </div>
+      </div>
+      <div class="field" id="unitField">
+        <label for="unitSelect">단원</label>
+        <select id="unitSelect"></select>
+        <div class="field-error">단원을 선택해 주세요.</div>
+      </div>
+      <div class="field" id="skillField">
+        <label for="skillSelect">기능</label>
+        <select id="skillSelect">
+          <option value="Listening">Listening</option>
+          <option value="Speaking">Speaking</option>
+          <option value="Writing">Writing</option>
+          <option value="통합">통합</option>
+        </select>
+      </div>
+      <div class="field" id="titleField">
+        <label for="titleInput">활동/게임 이름</label>
+        <input type="text" id="titleInput" placeholder="예: 가족 단어 짝맞추기 게임">
+        <div class="field-error">활동 이름을 입력해 주세요.</div>
+      </div>
+      <div class="field">
+        <label for="descInput">간단한 설명</label>
+        <textarea id="descInput" placeholder="예: 가족 단어 카드로 짝맞추기 게임하며 어휘 복습"></textarea>
+      </div>
+      <div class="field" id="urlField">
+        <label for="urlInput">웹페이지 주소(URL)</label>
+        <input type="text" id="urlInput" placeholder="예: sites.google.com/... 또는 https://...">
+        <div class="field-error">주소를 입력해 주세요. (예: sites.google.com/보기)</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="cancelBtn">취소</button>
+        <button type="submit" class="btn primary" id="saveBtn">저장</button>
+      </div>
+      <div id="modalError" style="display:none; color:var(--red); font-size:12.5px; margin-top:10px; text-align:right;"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+let activities = [];
+let currentGrade = "3";
+let storageOk = true;
+
+const STORAGE_KEY = "activities";
+
+const SUPABASE_URL = "https://kpjbzvcvbhuakevhyruz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q7JPoZ0VkRx4-2t1pj8Hpg_ibbRnrpM";
+
+let sbClient = null;
+try{
+  if(typeof supabase !== "undefined"){
+    sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+}catch(e){
+  sbClient = null;
+}
+
+// Supabase 저장/조회. 실패하면 이유를 그대로 반환해서 화면에 보여줄 수 있게 함
+async function storageGet(key){
+  if(!sbClient){
+    return { ok:false, value:null, error:"Supabase 스크립트를 불러오지 못했어요 (인터넷 연결을 확인해 주세요)." };
+  }
+  try{
+    const { data, error } = await sbClient.from("app_storage").select("value").eq("key", key).maybeSingle();
+    if(error) throw error;
+    return { ok:true, value: data ? data.value : null, error:null };
+  }catch(e){
+    return { ok:false, value:null, error: (e && e.message) ? e.message : String(e) };
+  }
+}
+
+async function storageSet(key, value){
+  if(!sbClient){
+    return { ok:false, error:"Supabase 스크립트를 불러오지 못했어요 (인터넷 연결을 확인해 주세요)." };
+  }
+  try{
+    const { error } = await sbClient.from("app_storage").upsert({ key, value, updated_at: new Date().toISOString() });
+    if(error) throw error;
+    return { ok:true, error:null };
+  }catch(e){
+    return { ok:false, error: (e && e.message) ? e.message : String(e) };
+  }
+}
+
+const UNIT_OPTIONS = {
+  "3": [
+    "1단원. Hello, ABC!",
+    "2단원. What's this?",
+    "3단원. Sit down, please",
+    "4단원. How many cows?",
+    "5단원. Do you like apples?",
+    "6단원. I can jump",
+    "7단원. I have a pencil",
+    "8단원. I'm happy",
+    "9단원. What color is it?",
+    "10단원. How's the weather?",
+    "단원 통합"
+  ],
+  "5": [
+    "1단원. Where are you from?",
+    "2단원. Can I use your camera?",
+    "3단원. What's in the living room?",
+    "4단원. Whose cap is this?",
+    "5단원. I get up at seven",
+    "6단원. What will you do this summer?",
+    "7단원. I went to Jeju-do",
+    "8단원. What's your favorite subject?",
+    "9단원. How much are these shoes?",
+    "10단원. Where is the library?",
+    "11단원. I have a headache",
+    "12단원. What do you want to do?",
+    "단원 통합"
+  ]
+};
+
+function populateUnitOptions(grade, valueToSelect){
+  const sel = document.getElementById("unitSelect");
+  sel.innerHTML = "";
+  UNIT_OPTIONS[grade].forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u;
+    opt.textContent = u;
+    sel.appendChild(opt);
+  });
+  if(valueToSelect && UNIT_OPTIONS[grade].includes(valueToSelect)){
+    sel.value = valueToSelect;
+  }
+}
+
+function setSyncStatus(state, detail){
+  const el = document.getElementById("syncStatus");
+  if(!el) return;
+  el.className = "sync-status " + state;
+  const label = state === "ok" ? "Supabase에 연결됨 · 모든 기기에서 동기화됩니다"
+    : state === "checking" ? "연결 확인 중..."
+    : "Supabase 연결 안 됨" + (detail ? " — " + detail : "");
+  el.textContent = label;
+}
+
+async function loadActivities(){
+  setSyncStatus("checking");
+  const timeout = new Promise((resolve) => resolve({ ok:false, value:null, error:"응답 시간 초과 (4초)" }));
+  const res = await Promise.race([
+    storageGet(STORAGE_KEY),
+    new Promise(resolve => setTimeout(() => resolve({ ok:false, value:null, error:"응답 시간 초과 (4초)" }), 4000))
+  ]);
+  if(res.ok){
+    activities = res.value ? JSON.parse(res.value) : [];
+    setSyncStatus("ok");
+  } else {
+    activities = [];
+    setSyncStatus("error", res.error);
+  }
+  document.getElementById("statusMsg").style.display = "none";
+  document.getElementById("contentArea").style.display = "block";
+  render();
+}
+
+async function saveActivities(){
+  const res = await Promise.race([
+    storageSet(STORAGE_KEY, JSON.stringify(activities)),
+    new Promise(resolve => setTimeout(() => resolve({ ok:false, error:"응답 시간 초과 (4초)" }), 4000))
+  ]);
+  if(res.ok){ setSyncStatus("ok"); return { persisted:true, error:null }; }
+  setSyncStatus("error", res.error);
+  return { persisted:false, error:res.error };
+}
+
+function naturalUnitSort(a, b){
+  return a.localeCompare(b, 'ko', { numeric: true, sensitivity: 'base' });
+}
+
+function render(){
+  const list = activities.filter(a => a.grade === currentGrade);
+  document.getElementById("count3").textContent = "(" + activities.filter(a=>a.grade==="3").length + ")";
+  document.getElementById("count5").textContent = "(" + activities.filter(a=>a.grade==="5").length + ")";
+
+  const area = document.getElementById("contentArea");
+  area.innerHTML = "";
+
+  if(list.length === 0){
+    area.innerHTML = '<p class="empty">아직 등록된 활동이 없어요. 위의 \'새 활동 추가\'로 첫 활동을 등록해 보세요.</p>';
+    return;
+  }
+
+  const units = {};
+  list.forEach(a => {
+    if(!units[a.unit]) units[a.unit] = [];
+    units[a.unit].push(a);
+  });
+  const unitNames = Object.keys(units).sort(naturalUnitSort);
+  const specialIdx = unitNames.indexOf("단원 통합");
+  if(specialIdx > -1){
+    unitNames.splice(specialIdx, 1);
+    unitNames.push("단원 통합");
+  }
+
+  unitNames.forEach(unitName => {
+    const block = document.createElement("div");
+    block.className = "unit-block";
+
+    const title = document.createElement("div");
+    title.className = "unit-title";
+    title.setAttribute("data-grade", currentGrade);
+    title.textContent = unitName;
+    block.appendChild(title);
+
+    const cardsWrap = document.createElement("div");
+    cardsWrap.className = "cards";
+
+    units[unitName].forEach(item => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.setAttribute("data-grade", currentGrade);
+      card.innerHTML = `
+        <div class="skill-chip" data-skill="${escapeAttr(item.skill || '')}"></div>
+        <div class="card-title"></div>
+        <p class="card-desc"></p>
+        <div class="card-actions">
+          <a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener noreferrer">
+            열기
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <div class="icon-btns">
+            <button class="icon-btn edit-btn" type="button" title="수정" aria-label="수정">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5L13.5 4.5L5 13H3V11L11.5 2.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="icon-btn danger del-btn" type="button" title="삭제" aria-label="삭제">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V2.5H10V4M4.5 4L5 13.5H11L11.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+      const chipEl = card.querySelector(".skill-chip");
+      if(item.skill){ chipEl.textContent = item.skill; } else { chipEl.style.display = "none"; }
+      card.querySelector(".card-title").textContent = item.title;
+      card.querySelector(".card-desc").textContent = item.desc || "";
+      card.querySelector(".edit-btn").addEventListener("click", () => openModal(item));
+      card.querySelector(".del-btn").addEventListener("click", () => deleteActivity(item.id));
+      cardsWrap.appendChild(card);
+    });
+
+    block.appendChild(cardsWrap);
+    area.appendChild(block);
+  });
+}
+
+function escapeAttr(s){
+  return (s || "").replace(/"/g, "&quot;");
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 4500);
+}
+
+// 탭 전환
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    currentGrade = tab.getAttribute("data-grade");
+    document.getElementById("folderBody").setAttribute("data-active-grade", currentGrade);
+    render();
+  });
+});
+
+// 모달 열기/닫기
+const overlay = document.getElementById("modalOverlay");
+const form = document.getElementById("activityForm");
+
+let selectedGrade = "3";
+document.querySelectorAll(".grade-opt").forEach(opt => {
+  opt.addEventListener("click", () => {
+    selectedGrade = opt.getAttribute("data-value");
+    document.querySelectorAll(".grade-opt").forEach(o => o.classList.toggle("selected", o === opt));
+    populateUnitOptions(selectedGrade);
+  });
+});
+
+function openModal(item){
+  document.getElementById("modalTitle").textContent = item ? "활동 수정" : "새 활동 추가";
+  document.getElementById("editId").value = item ? item.id : "";
+  document.getElementById("titleInput").value = item ? item.title : "";
+  document.getElementById("descInput").value = item ? (item.desc || "") : "";
+  document.getElementById("urlInput").value = item ? item.url : "";
+  ["unitField","titleField","urlField"].forEach(id => document.getElementById(id).classList.remove("has-error"));
+  document.getElementById("modalError").style.display = "none";
+  selectedGrade = item ? item.grade : currentGrade;
+  document.querySelectorAll(".grade-opt").forEach(o => o.classList.toggle("selected", o.getAttribute("data-value") === selectedGrade));
+  populateUnitOptions(selectedGrade, item ? item.unit : null);
+  document.getElementById("skillSelect").value = item ? (item.skill || "통합") : "통합";
+  overlay.style.display = "flex";
+  document.getElementById("unitSelect").focus();
+}
+
+function closeModal(){
+  overlay.style.display = "none";
+  form.reset();
+  ["unitField","titleField","urlField"].forEach(id => document.getElementById(id).classList.remove("has-error"));
+  const banner = document.getElementById("formBanner");
+  banner.className = "form-banner";
+  banner.textContent = "";
+}
+
+function normalizeUrl(raw){
+  let u = raw.trim();
+  if(!u) return "";
+  if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+  return u;
+}
+
+function handleSave(){
+  const modalErr = document.getElementById("modalError");
+  modalErr.style.display = "none";
+  modalErr.textContent = "";
+
+  const id = document.getElementById("editId").value;
+  const grade = selectedGrade;
+  const unit = document.getElementById("unitSelect").value;
+  const skill = document.getElementById("skillSelect").value;
+  const title = document.getElementById("titleInput").value.trim();
+  const desc = document.getElementById("descInput").value.trim();
+  const urlRaw = document.getElementById("urlInput").value.trim();
+  const url = normalizeUrl(urlRaw);
+
+  document.getElementById("unitField").classList.toggle("has-error", !unit);
+  document.getElementById("titleField").classList.toggle("has-error", !title);
+  document.getElementById("urlField").classList.toggle("has-error", !url);
+
+  if(!unit || !title || !url){
+    const missing = [];
+    if(!unit) missing.push("단원");
+    if(!title) missing.push("활동 이름");
+    if(!url) missing.push("주소(URL)");
+    modalErr.textContent = missing.join(", ") + " 항목을 입력해 주세요.";
+    modalErr.style.display = "block";
+    const firstBad = !unit ? "unitSelect" : (!title ? "titleInput" : "urlInput");
+    document.getElementById(firstBad).focus();
+    return;
+  }
+
+  if(id){
+    const idx = activities.findIndex(a => a.id === id);
+    if(idx > -1) activities[idx] = { ...activities[idx], grade, unit, skill, title, desc, url };
+  } else {
+    activities.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), grade, unit, skill, title, desc, url });
+  }
+
+  if(grade !== currentGrade){
+    currentGrade = grade;
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.getAttribute("data-grade") === grade));
+    document.getElementById("folderBody").setAttribute("data-active-grade", grade);
+  }
+
+  render();
+  closeModal();
+
+  saveActivities().then(res => {
+    if(!res.persisted){
+      showToast("자동 저장 실패: " + res.error);
+    }
+  });
+}
+
+document.getElementById("openAddBtn").addEventListener("click", () => openModal(null));
+document.getElementById("cancelBtn").addEventListener("click", closeModal);
+overlay.addEventListener("click", (e) => { if(e.target === overlay) closeModal(); });
+document.addEventListener("keydown", (e) => { if(e.key === "Escape" && overlay.style.display === "flex") closeModal(); });
+
+document.getElementById("saveBtn").addEventListener("click", (e) => {
+  e.preventDefault();
+  try{
+    handleSave();
+  }catch(err){
+    const modalErr = document.getElementById("modalError");
+    modalErr.textContent = "오류가 발생했어요: " + err.message;
+    modalErr.style.display = "block";
+  }
+});
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+});
+
+function deleteActivity(id){
+  activities = activities.filter(a => a.id !== id);
+  render();
+  saveActivities().then(res => {
+    if(!res.persisted){
+      showToast("삭제 저장 실패: " + res.error);
+    }
+  });
+}
+
+loadActivities();
+</script>
+</body>
+</html>
