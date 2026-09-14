@@ -145,6 +145,17 @@
   .folder-body[data-active-grade="5"]{ box-shadow:0 6px 0 var(--shadow), inset 0 4px 0 -1px var(--g5); }
 
   .unit-block + .unit-block{ margin-top:30px; }
+  .semester-header{
+    font-family:'Gaegu', cursive;
+    font-weight:700;
+    font-size:23px;
+    color:var(--ink);
+    margin:28px 0 16px;
+    padding-bottom:5px;
+    border-bottom:3px solid var(--ink);
+    display:inline-block;
+  }
+  .semester-header:first-child{ margin-top:4px; }
   .unit-title{
     display:inline-block;
     font-family:'Gaegu', cursive;
@@ -216,6 +227,7 @@
   }
   .skill-chip[data-skill="Listening"]{ background:#DCEBF5; color:#265E80; }
   .skill-chip[data-skill="Speaking"]{ background:#F7E2D3; color:#9C5024; }
+  .skill-chip[data-skill="Reading"]{ background:#F5E9C8; color:#8A6B10; }
   .skill-chip[data-skill="Writing"]{ background:#DEEBDA; color:#3C6B34; }
   .skill-chip[data-skill="통합"]{ background:#E7E1F0; color:#5B4C82; }
   .card-desc{
@@ -457,6 +469,7 @@
         <select id="skillSelect">
           <option value="Listening">Listening</option>
           <option value="Speaking">Speaking</option>
+          <option value="Reading">Reading</option>
           <option value="Writing">Writing</option>
           <option value="통합">통합</option>
         </select>
@@ -535,47 +548,77 @@ async function storageSet(key, value){
   }
 }
 
-const UNIT_OPTIONS = {
-  "3": [
-    "1단원. Hello, ABC!",
-    "2단원. What's this?",
-    "3단원. Sit down, please",
-    "4단원. How many cows?",
-    "5단원. Do you like apples?",
-    "6단원. I can jump",
-    "7단원. I have a pencil",
-    "8단원. I'm happy",
-    "9단원. What color is it?",
-    "10단원. How's the weather?",
-    "단원 통합"
-  ],
-  "5": [
-    "1단원. Where are you from?",
-    "2단원. Can I use your camera?",
-    "3단원. What's in the living room?",
-    "4단원. Whose cap is this?",
-    "5단원. I get up at seven",
-    "6단원. What will you do this summer?",
-    "7단원. I went to Jeju-do",
-    "8단원. What's your favorite subject?",
-    "9단원. How much are these shoes?",
-    "10단원. Where is the library?",
-    "11단원. I have a headache",
-    "12단원. What do you want to do?",
-    "단원 통합"
-  ]
+const UNIT_DATA = {
+  "3": {
+    special: "단원 통합",
+    semesters: [
+      { name: "1학기", units: [
+        "1단원. Hello, ABC!",
+        "2단원. What's this?",
+        "3단원. Sit down, please",
+        "4단원. How many cows?",
+        "5단원. Do you like apples?"
+      ]},
+      { name: "2학기", units: [
+        "6단원. I can jump",
+        "7단원. I have a pencil",
+        "8단원. I'm happy",
+        "9단원. What color is it?",
+        "10단원. How's the weather?"
+      ]}
+    ]
+  },
+  "5": {
+    special: "단원 통합",
+    semesters: [
+      { name: "1학기", units: [
+        "1단원. Where are you from?",
+        "2단원. Can I use your camera?",
+        "3단원. What's in the living room?",
+        "4단원. Whose cap is this?",
+        "5단원. I get up at seven",
+        "6단원. What will you do this summer?"
+      ]},
+      { name: "2학기", units: [
+        "7단원. I went to Jeju-do",
+        "8단원. What's your favorite subject?",
+        "9단원. How much are these shoes?",
+        "10단원. Where is the library?",
+        "11단원. I have a headache",
+        "12단원. What do you want to do?"
+      ]}
+    ]
+  }
 };
+
+function allUnitsForGrade(grade){
+  const d = UNIT_DATA[grade];
+  return [d.special, ...d.semesters.flatMap(s => s.units)];
+}
 
 function populateUnitOptions(grade, valueToSelect){
   const sel = document.getElementById("unitSelect");
   sel.innerHTML = "";
-  UNIT_OPTIONS[grade].forEach(u => {
-    const opt = document.createElement("option");
-    opt.value = u;
-    opt.textContent = u;
-    sel.appendChild(opt);
+  const d = UNIT_DATA[grade];
+
+  const specialOpt = document.createElement("option");
+  specialOpt.value = d.special;
+  specialOpt.textContent = d.special;
+  sel.appendChild(specialOpt);
+
+  d.semesters.forEach(s => {
+    const group = document.createElement("optgroup");
+    group.label = s.name;
+    s.units.forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
   });
-  if(valueToSelect && UNIT_OPTIONS[grade].includes(valueToSelect)){
+
+  if(valueToSelect && allUnitsForGrade(grade).includes(valueToSelect)){
     sel.value = valueToSelect;
   }
 }
@@ -636,68 +679,84 @@ function render(){
     return;
   }
 
-  const units = {};
+  const byUnit = {};
   list.forEach(a => {
-    if(!units[a.unit]) units[a.unit] = [];
-    units[a.unit].push(a);
+    if(!byUnit[a.unit]) byUnit[a.unit] = [];
+    byUnit[a.unit].push(a);
   });
-  const unitNames = Object.keys(units).sort(naturalUnitSort);
-  const specialIdx = unitNames.indexOf("단원 통합");
-  if(specialIdx > -1){
-    unitNames.splice(specialIdx, 1);
-    unitNames.push("단원 통합");
+
+  const d = UNIT_DATA[currentGrade];
+  const sections = [];
+  if(byUnit[d.special]){
+    sections.push({ heading: null, units: [d.special] });
   }
+  d.semesters.forEach(s => {
+    const unitsWithData = s.units.filter(u => byUnit[u]);
+    if(unitsWithData.length) sections.push({ heading: s.name, units: unitsWithData });
+  });
+  const knownUnits = new Set(allUnitsForGrade(currentGrade));
+  const leftover = Object.keys(byUnit).filter(u => !knownUnits.has(u)).sort(naturalUnitSort);
+  if(leftover.length) sections.push({ heading: "기타", units: leftover });
 
-  unitNames.forEach(unitName => {
-    const block = document.createElement("div");
-    block.className = "unit-block";
+  sections.forEach(sec => {
+    if(sec.heading){
+      const semHeader = document.createElement("div");
+      semHeader.className = "semester-header";
+      semHeader.textContent = sec.heading;
+      area.appendChild(semHeader);
+    }
 
-    const title = document.createElement("div");
-    title.className = "unit-title";
-    title.setAttribute("data-grade", currentGrade);
-    title.textContent = unitName;
-    block.appendChild(title);
+    sec.units.forEach(unitName => {
+      const block = document.createElement("div");
+      block.className = "unit-block";
 
-    const cardsWrap = document.createElement("div");
-    cardsWrap.className = "cards";
+      const title = document.createElement("div");
+      title.className = "unit-title";
+      title.setAttribute("data-grade", currentGrade);
+      title.textContent = unitName;
+      block.appendChild(title);
 
-    units[unitName].forEach(item => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.setAttribute("data-grade", currentGrade);
-      const fileList = getItemFiles(item);
-      const linksHtml = [
-        item.url ? `<a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener noreferrer">열기<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>` : "",
-        ...fileList.map((f, i) => `<a class="file-link" href="${escapeAttr(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(f.name || '')}">파일${fileList.length > 1 ? (i+1) : ""}<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 1.5H7L10 4.5V10.5H2V1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 1.5V4.5H10" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></a>`)
-      ].join("");
+      const cardsWrap = document.createElement("div");
+      cardsWrap.className = "cards";
 
-      card.innerHTML = `
-        <div class="skill-chip" data-skill="${escapeAttr(item.skill || '')}"></div>
-        <div class="card-title"></div>
-        <p class="card-desc"></p>
-        <div class="card-actions">
-          <div class="card-links">${linksHtml}</div>
-          <div class="icon-btns">
-            <button class="icon-btn edit-btn" type="button" title="수정" aria-label="수정">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5L13.5 4.5L5 13H3V11L11.5 2.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-            </button>
-            <button class="icon-btn danger del-btn" type="button" title="삭제" aria-label="삭제">
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V2.5H10V4M4.5 4L5 13.5H11L11.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
+      byUnit[unitName].forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.setAttribute("data-grade", currentGrade);
+        const fileList = getItemFiles(item);
+        const linksHtml = [
+          item.url ? `<a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener noreferrer">열기<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>` : "",
+          ...fileList.map((f, i) => `<a class="file-link" href="${escapeAttr(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(f.name || '')}">파일${fileList.length > 1 ? (i+1) : ""}<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 1.5H7L10 4.5V10.5H2V1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 1.5V4.5H10" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></a>`)
+        ].join("");
+
+        card.innerHTML = `
+          <div class="skill-chip" data-skill="${escapeAttr(item.skill || '')}"></div>
+          <div class="card-title"></div>
+          <p class="card-desc"></p>
+          <div class="card-actions">
+            <div class="card-links">${linksHtml}</div>
+            <div class="icon-btns">
+              <button class="icon-btn edit-btn" type="button" title="수정" aria-label="수정">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5L13.5 4.5L5 13H3V11L11.5 2.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="icon-btn danger del-btn" type="button" title="삭제" aria-label="삭제">
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 4H13M6 4V2.5H10V4M4.5 4L5 13.5H11L11.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
           </div>
-        </div>
-      `;
-      const chipEl = card.querySelector(".skill-chip");
-      if(item.skill){ chipEl.textContent = item.skill; } else { chipEl.style.display = "none"; }
-      card.querySelector(".card-title").textContent = item.title;
-      card.querySelector(".card-desc").textContent = item.desc || "";
-      card.querySelector(".edit-btn").addEventListener("click", () => openModal(item));
-      card.querySelector(".del-btn").addEventListener("click", () => deleteActivity(item.id));
-      cardsWrap.appendChild(card);
-    });
+        `;
+        const chipEl = card.querySelector(".skill-chip");
+        if(item.skill){ chipEl.textContent = item.skill; } else { chipEl.style.display = "none"; }
+        card.querySelector(".card-title").textContent = item.title;
+        card.querySelector(".card-desc").textContent = item.desc || "";
+        card.querySelector(".edit-btn").addEventListener("click", () => openModal(item));
+        card.querySelector(".del-btn").addEventListener("click", () => deleteActivity(item.id));
+        cardsWrap.appendChild(card);
+      });
 
-    block.appendChild(cardsWrap);
-    area.appendChild(block);
+      block.appendChild(cardsWrap);
+      area.appendChild(block);
+    });
   });
 }
 
