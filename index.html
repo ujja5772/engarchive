@@ -309,6 +309,11 @@
     border-radius:6px;
     padding:6px 9px;
     display:flex;
+    flex-direction:column;
+    gap:5px;
+  }
+  .current-file-row{
+    display:flex;
     align-items:center;
     justify-content:space-between;
     gap:8px;
@@ -471,8 +476,8 @@
         <div class="field-error">주소 또는 파일 중 하나는 있어야 해요.</div>
       </div>
       <div class="field" id="fileField">
-        <label for="fileInput">수업 파일 첨부 <span class="opt-note">(PPT, PDF 등, 선택)</span></label>
-        <input type="file" id="fileInput" accept=".ppt,.pptx,.pdf,.doc,.docx,.hwp,.hwpx,.key,.zip">
+        <label for="fileInput">수업 파일 첨부 <span class="opt-note">(PPT, PDF 등, 여러 개 선택 가능)</span></label>
+        <input type="file" id="fileInput" accept=".ppt,.pptx,.pdf,.doc,.docx,.hwp,.hwpx,.key,.zip" multiple>
         <div class="current-file" id="currentFileInfo" style="display:none;"></div>
       </div>
       <div class="modal-actions">
@@ -660,9 +665,10 @@ function render(){
       const card = document.createElement("div");
       card.className = "card";
       card.setAttribute("data-grade", currentGrade);
+      const fileList = getItemFiles(item);
       const linksHtml = [
         item.url ? `<a class="open-link" href="${escapeAttr(item.url)}" target="_blank" rel="noopener noreferrer">열기<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>` : "",
-        item.fileUrl ? `<a class="file-link" href="${escapeAttr(item.fileUrl)}" target="_blank" rel="noopener noreferrer">파일<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 1.5H7L10 4.5V10.5H2V1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 1.5V4.5H10" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></a>` : ""
+        ...fileList.map((f, i) => `<a class="file-link" href="${escapeAttr(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(f.name || '')}">파일${fileList.length > 1 ? (i+1) : ""}<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 1.5H7L10 4.5V10.5H2V1.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 1.5V4.5H10" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></a>`)
       ].join("");
 
       card.innerHTML = `
@@ -699,6 +705,17 @@ function escapeAttr(s){
   return (s || "").replace(/"/g, "&quot;");
 }
 
+// 새 형식(item.files 배열)과 예전 형식(item.fileUrl 단일값)을 모두 지원
+function getItemFiles(item){
+  if(Array.isArray(item.files) && item.files.length){
+    return item.files;
+  }
+  if(item.fileUrl){
+    return [{ url: item.fileUrl, name: item.fileName || "파일" }];
+  }
+  return [];
+}
+
 let toastTimer = null;
 function showToast(msg){
   const t = document.getElementById("toast");
@@ -724,7 +741,7 @@ const overlay = document.getElementById("modalOverlay");
 const form = document.getElementById("activityForm");
 
 let selectedGrade = "3";
-let removeFileFlag = false;
+let removedFileUrls = new Set();
 document.querySelectorAll(".grade-opt").forEach(opt => {
   opt.addEventListener("click", () => {
     selectedGrade = opt.getAttribute("data-value");
@@ -735,24 +752,25 @@ document.querySelectorAll(".grade-opt").forEach(opt => {
 
 function renderCurrentFileInfo(item){
   const box = document.getElementById("currentFileInfo");
-  if(item && item.fileUrl && !removeFileFlag){
-    box.style.display = "flex";
-    box.innerHTML = `<span>현재 첨부: ${escapeAttr(item.fileName || "파일")}</span><button type="button" class="remove-file-btn" id="removeFileBtn">첨부 삭제</button>`;
-    document.getElementById("removeFileBtn").addEventListener("click", () => {
-      removeFileFlag = true;
-      renderCurrentFileInfo(item);
-    });
-  } else if(item && item.fileUrl && removeFileFlag){
-    box.style.display = "flex";
-    box.innerHTML = `<span>삭제 예정: ${escapeAttr(item.fileName || "파일")}</span><button type="button" class="remove-file-btn" id="undoRemoveBtn">취소</button>`;
-    document.getElementById("undoRemoveBtn").addEventListener("click", () => {
-      removeFileFlag = false;
-      renderCurrentFileInfo(item);
-    });
-  } else {
+  const files = item ? getItemFiles(item) : [];
+  if(!files.length){
     box.style.display = "none";
     box.innerHTML = "";
+    return;
   }
+  box.style.display = "flex";
+  box.innerHTML = "";
+  files.forEach(f => {
+    const removing = removedFileUrls.has(f.url);
+    const row = document.createElement("div");
+    row.className = "current-file-row";
+    row.innerHTML = `<span>${removing ? "삭제 예정: " : "현재 첨부: "}${escapeAttr(f.name || "파일")}</span><button type="button" class="remove-file-btn">${removing ? "취소" : "삭제"}</button>`;
+    row.querySelector(".remove-file-btn").addEventListener("click", () => {
+      if(removing){ removedFileUrls.delete(f.url); } else { removedFileUrls.add(f.url); }
+      renderCurrentFileInfo(item);
+    });
+    box.appendChild(row);
+  });
 }
 
 function openModal(item){
@@ -762,7 +780,7 @@ function openModal(item){
   document.getElementById("descInput").value = item ? (item.desc || "") : "";
   document.getElementById("urlInput").value = item ? (item.url || "") : "";
   document.getElementById("fileInput").value = "";
-  removeFileFlag = false;
+  removedFileUrls = new Set();
   renderCurrentFileInfo(item);
   ["unitField","titleField","urlField"].forEach(id => document.getElementById(id).classList.remove("has-error"));
   document.getElementById("modalError").style.display = "none";
@@ -777,7 +795,7 @@ function openModal(item){
 function closeModal(){
   overlay.style.display = "none";
   form.reset();
-  removeFileFlag = false;
+  removedFileUrls = new Set();
   document.getElementById("currentFileInfo").style.display = "none";
   ["unitField","titleField","urlField"].forEach(id => document.getElementById(id).classList.remove("has-error"));
 }
@@ -796,11 +814,11 @@ function makeId(){
 async function uploadFile(file, grade){
   if(!sbClient){ throw new Error("Supabase가 연결되어 있지 않아요."); }
   const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-  const path = grade + "/" + Date.now() + "_" + safeName;
+  const path = grade + "/" + Date.now() + "_" + Math.random().toString(36).slice(2,6) + "_" + safeName;
   const { error: upErr } = await sbClient.storage.from("lesson-files").upload(path, file, { upsert: true });
   if(upErr) throw upErr;
   const { data } = sbClient.storage.from("lesson-files").getPublicUrl(path);
-  return { fileUrl: data.publicUrl, fileName: file.name };
+  return { url: data.publicUrl, name: file.name };
 }
 
 function handleSave(){
@@ -818,9 +836,9 @@ function handleSave(){
   const urlRaw = document.getElementById("urlInput").value.trim();
   const url = urlRaw ? normalizeUrl(urlRaw) : "";
   const fileEl = document.getElementById("fileInput");
-  const chosenFile = (fileEl.files && fileEl.files[0]) ? fileEl.files[0] : null;
-  const keepsExistingFile = !!(existing && existing.fileUrl && !removeFileFlag);
-  const hasLink = !!(url || chosenFile || keepsExistingFile);
+  const chosenFiles = fileEl.files ? Array.from(fileEl.files) : [];
+  const keptExistingFiles = existing ? getItemFiles(existing).filter(f => !removedFileUrls.has(f.url)) : [];
+  const hasLink = !!(url || chosenFiles.length || keptExistingFiles.length);
 
   document.getElementById("unitField").classList.toggle("has-error", !unit);
   document.getElementById("titleField").classList.toggle("has-error", !title);
@@ -841,8 +859,8 @@ function handleSave(){
   const newId = id || makeId();
   const baseData = {
     id: newId, grade, unit, skill, title, desc, url,
-    fileUrl: keepsExistingFile ? existing.fileUrl : "",
-    fileName: keepsExistingFile ? existing.fileName : ""
+    files: keptExistingFiles,
+    fileUrl: "", fileName: ""
   };
 
   if(id){
@@ -861,13 +879,12 @@ function handleSave(){
   render();
   closeModal();
 
-  if(chosenFile){
-    showToast("파일 업로드 중...");
-    uploadFile(chosenFile, grade).then(res => {
+  if(chosenFiles.length){
+    showToast(chosenFiles.length > 1 ? "파일 " + chosenFiles.length + "개 업로드 중..." : "파일 업로드 중...");
+    Promise.all(chosenFiles.map(f => uploadFile(f, grade))).then(results => {
       const idx2 = activities.findIndex(a => a.id === newId);
       if(idx2 > -1){
-        activities[idx2].fileUrl = res.fileUrl;
-        activities[idx2].fileName = res.fileName;
+        activities[idx2].files = [...(activities[idx2].files || []), ...results];
         render();
       }
       return saveActivities();
