@@ -81,6 +81,26 @@
   .sync-status.checking{ color:var(--ink-faint); }
   .sync-status.error{ color:var(--red); }
 
+  .lock-indicator{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    background:none;
+    border:1.3px solid var(--paper-line);
+    border-radius:20px;
+    padding:5px 12px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    cursor:pointer;
+    margin-bottom:16px;
+  }
+  .lock-indicator.unlocked{
+    border-color:#8FB88A;
+    color:#3C6B34;
+    background:#EAF3E7;
+  }
+
   .add-btn{
     display:inline-flex;
     align-items:center;
@@ -215,6 +235,20 @@
     margin:4px 0 6px;
     padding-right:44px;
   }
+  .card-title-en{
+    font-size:12.5px;
+    font-style:italic;
+    color:var(--g5-deep);
+    margin:-4px 0 6px;
+    padding-right:44px;
+  }
+  .card-desc-en{
+    font-size:12.5px;
+    font-style:italic;
+    color:var(--ink-faint);
+    margin:-8px 0 12px;
+    line-height:1.5;
+  }
   .skill-chip{
     display:inline-block;
     font-size:11px;
@@ -346,6 +380,21 @@
     color:var(--ink);
   }
   .field select{ cursor:pointer; }
+  .translate-btn{
+    display:block;
+    width:100%;
+    background:#EEF4EF;
+    border:1.3px dashed var(--g5);
+    color:var(--g5-deep);
+    border-radius:6px;
+    padding:8px 0;
+    font-size:12.5px;
+    font-weight:700;
+    cursor:pointer;
+    margin:-6px 0 14px;
+  }
+  .translate-btn:hover{ background:#E1EEE3; }
+  .translate-btn:disabled{ opacity:0.6; cursor:default; }
   .field textarea{ resize:vertical; min-height:56px; }
   .field.has-error input{ border-color:var(--red); }
   .field-error{ color:var(--red); font-size:12px; margin-top:4px; display:none; }
@@ -433,6 +482,8 @@
     </button>
   </header>
 
+  <button class="lock-indicator" id="lockIndicator" type="button">🔒 관리자 잠금</button>
+
   <nav class="tabs">
     <button class="tab active" data-grade="3">3학년 <span class="count" id="count3"></span></button>
     <button class="tab" data-grade="5">5학년 <span class="count" id="count5"></span></button>
@@ -445,6 +496,23 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="lockOverlay" style="display:none;">
+  <div class="modal" style="max-width:320px;">
+    <h2>🔒 관리자 확인</h2>
+    <form id="lockForm">
+      <div class="field">
+        <label for="lockPassword">비밀번호</label>
+        <input type="password" id="lockPassword" autocomplete="off">
+        <div id="lockError" style="display:none; color:var(--red); font-size:12px; margin-top:6px;">비밀번호가 틀렸어요.</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="lockCancelBtn">취소</button>
+        <button type="submit" class="btn primary">확인</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="modal-overlay" id="modalOverlay" style="display:none;">
   <div class="modal">
@@ -483,6 +551,15 @@
         <label for="descInput">간단한 설명</label>
         <textarea id="descInput" placeholder="예: 가족 단어 카드로 짝맞추기 게임하며 어휘 복습"></textarea>
       </div>
+      <button type="button" class="translate-btn" id="translateBtn">🌐 영어로 자동 번역</button>
+      <div class="field">
+        <label for="titleEnInput">Title (English) <span class="opt-note">(원어민 선생님용, 선택)</span></label>
+        <input type="text" id="titleEnInput" placeholder="자동 번역 버튼을 누르면 채워져요">
+      </div>
+      <div class="field">
+        <label for="descEnInput">Description (English) <span class="opt-note">(선택)</span></label>
+        <textarea id="descEnInput" placeholder="자동 번역 버튼을 누르면 채워져요"></textarea>
+      </div>
       <div class="field" id="urlField">
         <label for="urlInput">웹페이지 주소(URL) <span class="opt-note">(선택)</span></label>
         <input type="text" id="urlInput" placeholder="예: sites.google.com/... 또는 https://...">
@@ -508,6 +585,41 @@ let currentGrade = "3";
 let storageOk = true;
 
 const STORAGE_KEY = "activities";
+
+// 관리자 잠금 (간단한 비밀번호 확인용 - 페이지 소스에 그대로 보이므로
+// 학생/동료가 실수로 건드리는 걸 막는 정도의 잠금이며, 완전한 보안은 아님)
+const LOCK_PASSWORD = "Olivia1234";
+function readUnlockFlag(){
+  try{ return sessionStorage.getItem("drawerUnlocked") === "1"; }catch(e){ return false; }
+}
+function writeUnlockFlag(val){
+  try{
+    if(val){ sessionStorage.setItem("drawerUnlocked", "1"); }
+    else{ sessionStorage.removeItem("drawerUnlocked"); }
+  }catch(e){ /* 세션 저장이 막힌 환경이면 이번 탭 안에서만 유지됨 */ }
+}
+let isUnlocked = readUnlockFlag();
+let pendingUnlockAction = null;
+
+function updateLockIndicator(){
+  const btn = document.getElementById("lockIndicator");
+  if(isUnlocked){
+    btn.textContent = "🔓 잠금 해제됨 (탭하면 다시 잠그기)";
+    btn.classList.add("unlocked");
+  } else {
+    btn.textContent = "🔒 관리자 잠금";
+    btn.classList.remove("unlocked");
+  }
+}
+
+function requireUnlock(action){
+  if(isUnlocked){ action(); return; }
+  pendingUnlockAction = action;
+  document.getElementById("lockPassword").value = "";
+  document.getElementById("lockError").style.display = "none";
+  document.getElementById("lockOverlay").style.display = "flex";
+  document.getElementById("lockPassword").focus();
+}
 
 const SUPABASE_URL = "https://kpjbzvcvbhuakevhyruz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q7JPoZ0VkRx4-2t1pj8Hpg_ibbRnrpM";
@@ -732,7 +844,9 @@ function render(){
         card.innerHTML = `
           <div class="skill-chip" data-skill="${escapeAttr(item.skill || '')}"></div>
           <div class="card-title"></div>
+          <div class="card-title-en" style="display:none;"></div>
           <p class="card-desc"></p>
+          <p class="card-desc-en" style="display:none;"></p>
           <div class="card-actions">
             <div class="card-links">${linksHtml}</div>
             <div class="icon-btns">
@@ -749,8 +863,18 @@ function render(){
         if(item.skill){ chipEl.textContent = item.skill; } else { chipEl.style.display = "none"; }
         card.querySelector(".card-title").textContent = item.title;
         card.querySelector(".card-desc").textContent = item.desc || "";
-        card.querySelector(".edit-btn").addEventListener("click", () => openModal(item));
-        card.querySelector(".del-btn").addEventListener("click", () => deleteActivity(item.id));
+        if(item.titleEn){
+          const elTEn = card.querySelector(".card-title-en");
+          elTEn.textContent = item.titleEn;
+          elTEn.style.display = "block";
+        }
+        if(item.descEn){
+          const elDEn = card.querySelector(".card-desc-en");
+          elDEn.textContent = item.descEn;
+          elDEn.style.display = "block";
+        }
+        card.querySelector(".edit-btn").addEventListener("click", () => requireUnlock(() => openModal(item)));
+        card.querySelector(".del-btn").addEventListener("click", () => requireUnlock(() => deleteActivity(item.id)));
         cardsWrap.appendChild(card);
       });
 
@@ -837,6 +961,8 @@ function openModal(item){
   document.getElementById("editId").value = item ? item.id : "";
   document.getElementById("titleInput").value = item ? item.title : "";
   document.getElementById("descInput").value = item ? (item.desc || "") : "";
+  document.getElementById("titleEnInput").value = item ? (item.titleEn || "") : "";
+  document.getElementById("descEnInput").value = item ? (item.descEn || "") : "";
   document.getElementById("urlInput").value = item ? (item.url || "") : "";
   document.getElementById("fileInput").value = "";
   removedFileUrls = new Set();
@@ -870,6 +996,38 @@ function makeId(){
   return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 }
 
+// 무료 번역 API(MyMemory)를 이용한 한국어 → 영어 자동 번역
+// (품질이 완벽하지 않을 수 있어, 채워진 뒤 원어민 선생님이 확인해서 다듬는 걸 권장)
+async function translateKoToEn(text){
+  if(!text) return "";
+  const res = await fetch("https://api.mymemory.translated.net/get?q=" + encodeURIComponent(text) + "&langpair=ko|en");
+  if(!res.ok) throw new Error("번역 서버 응답 오류");
+  const data = await res.json();
+  return (data && data.responseData && data.responseData.translatedText) ? data.responseData.translatedText : "";
+}
+
+document.getElementById("translateBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("translateBtn");
+  const koTitle = document.getElementById("titleInput").value.trim();
+  const koDesc = document.getElementById("descInput").value.trim();
+  if(!koTitle && !koDesc){
+    showToast("번역할 활동 이름이나 설명을 먼저 입력해 주세요.");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "번역 중...";
+  try{
+    const [enTitle, enDesc] = await Promise.all([translateKoToEn(koTitle), translateKoToEn(koDesc)]);
+    if(enTitle) document.getElementById("titleEnInput").value = enTitle;
+    if(enDesc) document.getElementById("descEnInput").value = enDesc;
+    showToast("번역 완료 — 확인 후 필요하면 고쳐 주세요.");
+  }catch(err){
+    showToast("번역 실패: " + (err && err.message ? err.message : err));
+  }
+  btn.disabled = false;
+  btn.textContent = "🌐 영어로 자동 번역";
+});
+
 async function uploadFile(file, grade){
   if(!sbClient){ throw new Error("Supabase가 연결되어 있지 않아요."); }
   const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
@@ -892,6 +1050,8 @@ function handleSave(){
   const skill = document.getElementById("skillSelect").value;
   const title = document.getElementById("titleInput").value.trim();
   const desc = document.getElementById("descInput").value.trim();
+  const titleEn = document.getElementById("titleEnInput").value.trim();
+  const descEn = document.getElementById("descEnInput").value.trim();
   const urlRaw = document.getElementById("urlInput").value.trim();
   const url = urlRaw ? normalizeUrl(urlRaw) : "";
   const fileEl = document.getElementById("fileInput");
@@ -917,7 +1077,7 @@ function handleSave(){
 
   const newId = id || makeId();
   const baseData = {
-    id: newId, grade, unit, skill, title, desc, url,
+    id: newId, grade, unit, skill, title, desc, titleEn, descEn, url,
     files: keptExistingFiles,
     fileUrl: "", fileName: ""
   };
@@ -965,7 +1125,7 @@ function handleSave(){
   }
 }
 
-document.getElementById("openAddBtn").addEventListener("click", () => openModal(null));
+document.getElementById("openAddBtn").addEventListener("click", () => requireUnlock(() => openModal(null)));
 document.getElementById("cancelBtn").addEventListener("click", closeModal);
 overlay.addEventListener("click", (e) => { if(e.target === overlay) closeModal(); });
 document.addEventListener("keydown", (e) => { if(e.key === "Escape" && overlay.style.display === "flex") closeModal(); });
@@ -995,6 +1155,46 @@ function deleteActivity(id){
   });
 }
 
+document.getElementById("lockIndicator").addEventListener("click", () => {
+  if(isUnlocked){
+    isUnlocked = false;
+    writeUnlockFlag(false);
+    updateLockIndicator();
+    showToast("다시 잠갔어요.");
+  } else {
+    requireUnlock(() => {});
+  }
+});
+
+document.getElementById("lockCancelBtn").addEventListener("click", () => {
+  document.getElementById("lockOverlay").style.display = "none";
+  pendingUnlockAction = null;
+});
+
+document.getElementById("lockOverlay").addEventListener("click", (e) => {
+  if(e.target.id === "lockOverlay"){
+    document.getElementById("lockOverlay").style.display = "none";
+    pendingUnlockAction = null;
+  }
+});
+
+document.getElementById("lockForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const val = document.getElementById("lockPassword").value;
+  if(val === LOCK_PASSWORD){
+    isUnlocked = true;
+    writeUnlockFlag(true);
+    updateLockIndicator();
+    document.getElementById("lockOverlay").style.display = "none";
+    const action = pendingUnlockAction;
+    pendingUnlockAction = null;
+    if(action) action();
+  } else {
+    document.getElementById("lockError").style.display = "block";
+  }
+});
+
+updateLockIndicator();
 loadActivities();
 </script>
 </body>
